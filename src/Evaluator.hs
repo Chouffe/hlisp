@@ -40,8 +40,8 @@ numBoolBinop  = boolBinop unpackNum
 strBoolBinop  = boolBinop unpackStr
 boolBoolBinop = boolBinop unpackBool
 
-evalExpr :: [Expr] -> ThrowsError Expr
-evalExpr (expr:_) = eval expr
+-- evalExpr :: [Expr] -> ThrowsError Expr
+-- evalExpr (expr:_) = eval expr
 
 isString :: [Expr] -> ThrowsError Expr
 isString ((String _ ) : []) = return $ Bool True
@@ -80,10 +80,11 @@ eqv [_, _]                                 = return $ Bool False
 eqv badArgList                             = throwError $ NumArgs 2 badArgList
 
 primitives :: [(String, [Expr] -> ThrowsError Expr)]
-primitives = [ ("eval", evalExpr)
+primitives = [
+             -- ("eval", evalExpr)
 
              -- List Primitives
-             , ("car", car)
+               ("car", car)
              , ("cdr", cdr)
              , ("cons", cons)
 
@@ -111,75 +112,80 @@ primitives = [ ("eval", evalExpr)
              , ("*", numericBinop (*))]
 
 
-apply :: String -> [Expr] -> ThrowsError Expr
-apply func args = maybe (throwError $ NotFunction "Unrecognized primitive function args" func)
-                        ($ args)
-                        (lookup func primitives)
-
-eval :: Expr -> ThrowsError Expr
-eval val@(String _) = return val
-eval val@(Number _) = return val
-eval val@(Symbol _) = throwError $ Default "Environment not implemented yet..."
-eval val@(Keyword _) = return val
-eval Nil = return Nil
-eval val@(Bool _) = return val
+eval :: Env -> Expr -> IOThrowsError Expr
+eval _ val@(String _) = return val
+eval _ val@(Number _) = return val
+eval _ val@(Keyword _) = return val
+eval _ Nil = return Nil
+eval _ val@(Bool _) = return val
+eval env val@(Symbol var) = getVar env var
 
 -- -------------
 -- Special forms
 -- -------------
 
+-- Def
+eval env (List [Symbol "def", (Symbol var), expr]) = eval env expr >>= defineVar env var
+
 -- Quote
-eval (List [Symbol "quote", expr]) = return expr
+eval _ (List [Symbol "quote", expr]) = return expr
 
 -- If
-eval (List [Symbol "if", pred, thenBranch, elseBranch]) = do
-    result <- eval pred
+eval env (List [Symbol "if", pred, thenBranch, elseBranch]) = do
+    result <- eval env pred
     case result of
-        Bool False -> eval elseBranch
-        _ -> eval thenBranch
+        Bool False -> eval env elseBranch
+        _          -> eval env thenBranch
 
 -- Cond
-eval (List [Symbol "cond"]) = return $ Nil
-eval (List ((Symbol "cond") : (List (pred : e : [])) : clauses)) = do
-    result <- eval pred
+eval _ (List [Symbol "cond"]) = return $ Nil
+eval env (List ((Symbol "cond") : (List (pred : e : [])) : clauses)) = do
+    result <- eval env pred
     case result of
-        Bool False -> eval $ List (Symbol "cond" : clauses)
-        _ -> eval e
-eval (List ((Symbol "cond") : (List val@(pred : e : _)) : _)) = throwError $ BadSpecialForm "Malformed cond" (List val)
-eval cond@(List ((Symbol "cond") : _))  = throwError $ BadSpecialForm "Malformed cond" cond
+        Bool False -> eval env $ List (Symbol "cond" : clauses)
+        _ -> eval env e
+eval _ (List ((Symbol "cond") : (List val@(pred : e : _)) : _)) = throwError $ BadSpecialForm "Malformed cond" (List val)
+eval _ cond@(List ((Symbol "cond") : _))  = throwError $ BadSpecialForm "Malformed cond" cond
 
 -- Case
-eval (List [Symbol "case", key]) = return $ Nil
-eval (List ((Symbol "case") : key : (List (e1 : e2 : [])) : clauses)) = do
-    evaledKey <- eval key
-    evaledE1 <- eval e1
+eval _ (List [Symbol "case", key]) = return $ Nil
+eval env (List ((Symbol "case") : key : (List (e1 : e2 : [])) : clauses)) = do
+    evaledKey <- eval env key
+    evaledE1 <- eval env e1
     if evaledKey == evaledE1
-    then eval e2
-    else eval (List ((Symbol "case") : evaledKey : clauses))
-eval (List ((Symbol "case") : key : val@(List (e1 : e2 : _)) : clauses)) = throwError $ BadSpecialForm "Malformed case" val
+    then eval env e2
+    else eval env (List ((Symbol "case") : evaledKey : clauses))
+eval _ (List ((Symbol "case") : key : val@(List (e1 : e2 : _)) : clauses)) = throwError $ BadSpecialForm "Malformed case" val
 
 -- And
-eval (List [Symbol "and"]) = return $ Bool True
-eval (List ((Symbol "and") : expr : [])) = eval expr
-eval (List ((Symbol "and") : expr : exprs)) = do
-    evaledExpr <- eval expr
+eval _ (List [Symbol "and"]) = return $ Bool True
+eval env (List ((Symbol "and") : expr : [])) = eval env expr
+eval env (List ((Symbol "and") : expr : exprs)) = do
+    evaledExpr <- eval env expr
     case evaledExpr of
         Bool False -> return $ Bool False
-        _ -> return evaledExpr
+        _          -> eval env (List ((Symbol "and") : exprs))
 
 -- Or
-eval (List [Symbol "or"]) = return Nil
-eval (List ((Symbol "or") : expr : [])) = eval expr
-eval (List ((Symbol "or") : expr : exprs)) = do
-    evaledExpr <- eval expr
+eval _ (List [Symbol "or"]) = return Nil
+eval env (List ((Symbol "or") : expr : [])) = eval env expr
+eval env (List ((Symbol "or") : expr : exprs)) = do
+    evaledExpr <- eval env expr
     case evaledExpr of
         Bool True -> return evaledExpr
-        _ -> eval (List ((Symbol "or") : exprs))
+        _ -> eval env (List ((Symbol "or") : exprs))
 
 -- Function application
-eval (List (Symbol fun : args)) = mapM eval args >>= apply fun
+eval env (List (Symbol fun : args)) = mapM (eval env) args >>= liftThrows . apply fun
 
-eval badForm = throwError $ BadSpecialForm "Unrecognized special form" badForm
+
+eval _ badForm = throwError $ BadSpecialForm "Unrecognized special form" badForm
+
+apply :: String -> [Expr] -> ThrowsError Expr
+apply func args = maybe (throwError $ NotFunction "Unrecognized primitive function args" func)
+                        ($ args)
+                        (lookup func primitives)
+
 
 x = List [Symbol "quote", List [(Symbol "+"), Number 10, Number 32]]
 y = List [ Symbol "if"

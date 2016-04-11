@@ -1,11 +1,11 @@
 
 ==================== FINAL INTERFACE ====================
-2016-04-09 00:59:08.621492 UTC
+2016-04-11 22:58:26.224796 UTC
 
 interface main@main:Main 7103
-  interface hash: c5738645891aa1d4763ae0b99b92876a
-  ABI hash: 2c5405b1369f525df16976201fce6542
-  export-list hash: 5c5753333e41aa18116224a1c29031d0
+  interface hash: be7bd4fb38654dc3f60e29d12d0658af
+  ABI hash: af5a7e56c954e7c142c876c602cf3413
+  export-list hash: 08f9d01770ed378966d3a6e4344194c7
   orphan hash: 693e9af84d3dfcc71e640e005bdc5e2e
   flag hash: 2a97afd7fd9ec92a458f5e111612f6bd
   sig of: Nothing
@@ -14,40 +14,74 @@ interface main@main:Main 7103
 exports:
   Main.main
 module dependencies:
-package dependencies: base-4.8.2.0* ghc-prim-0.4.0.0
-                      hlisp-0.1.0.0@hlisp_GOYMb9K7faXDOlOke6FXo9 integer-gmp-1.0.0.0
+package dependencies: array-0.5.1.0@array_67iodizgJQIIxYVTp4emlA
+                      base-4.8.2.0* binary-0.7.5.0@binar_3uXFWMoAGBg0xKP9MHKRwi
+                      bytestring-0.10.6.0@bytes_6VWy06pWzJq9evDvK2d4w6
+                      containers-0.5.6.2@conta_2C3ZI8RgPO2LBMidXKTvIU
+                      deepseq-1.4.1.1@deeps_6vMKxt5sPFR0XsbRWvvq59 ghc-prim-0.4.0.0
+                      hlisp-0.1.0.0@hlisp_5eFb00DvSUIEQp41yemx8K integer-gmp-1.0.0.0
+                      mtl-2.2.1@mtl_Aue4leSeVkpKLsfHIV51E8
+                      parsec-3.1.9@parse_7aUabKPjr5W6Al5Ge35AQl
+                      text-1.2.2.1@text_HmqVQnZSpjaC156ABqPhne
+                      transformers-0.4.2.0@trans_GZTjP9K5WFq01xC9BAGQpF
 orphans: base-4.8.2.0:GHC.Base base-4.8.2.0:GHC.Float
+         binary-0.7.5.0@binar_3uXFWMoAGBg0xKP9MHKRwi:Data.Binary.Generic
+         bytestring-0.10.6.0@bytes_6VWy06pWzJq9evDvK2d4w6:Data.ByteString.Builder
+         text-1.2.2.1@text_HmqVQnZSpjaC156ABqPhne:Data.Text
+         text-1.2.2.1@text_HmqVQnZSpjaC156ABqPhne:Data.Text.Lazy
+         text-1.2.2.1@text_HmqVQnZSpjaC156ABqPhne:Data.Text.Show
+         transformers-0.4.2.0@trans_GZTjP9K5WFq01xC9BAGQpF:Control.Monad.Trans.Error
 family instance modules: base-4.8.2.0:Control.Applicative
-                         base-4.8.2.0:Data.Either base-4.8.2.0:Data.Monoid
-                         base-4.8.2.0:Data.Type.Equality base-4.8.2.0:GHC.Generics
-import  -/  base-4.8.2.0:GHC.Base 1db77db5dae73d8c424c85b09fbadb89
+                         base-4.8.2.0:Data.Either base-4.8.2.0:Data.Functor.Identity
+                         base-4.8.2.0:Data.Monoid base-4.8.2.0:Data.Type.Equality
+                         base-4.8.2.0:Data.Void base-4.8.2.0:GHC.Exts
+                         base-4.8.2.0:GHC.Generics
+                         containers-0.5.6.2@conta_2C3ZI8RgPO2LBMidXKTvIU:Data.IntMap.Base
+                         containers-0.5.6.2@conta_2C3ZI8RgPO2LBMidXKTvIU:Data.IntSet.Base
+                         containers-0.5.6.2@conta_2C3ZI8RgPO2LBMidXKTvIU:Data.Map.Base
+                         containers-0.5.6.2@conta_2C3ZI8RgPO2LBMidXKTvIU:Data.Sequence
+                         containers-0.5.6.2@conta_2C3ZI8RgPO2LBMidXKTvIU:Data.Set.Base
+                         text-1.2.2.1@text_HmqVQnZSpjaC156ABqPhne:Data.Text
+                         text-1.2.2.1@text_HmqVQnZSpjaC156ABqPhne:Data.Text.Lazy
+import  -/  base-4.8.2.0:Data.Foldable 2ce969969ad5231eb40bd713f94f05ad
 import  -/  base-4.8.2.0:GHC.List 0c736920522bbd14b770342776012ab6
 import  -/  base-4.8.2.0:Prelude 694dcaf039efe62df1c44834e2dbd2fb
 import  -/  base-4.8.2.0:System.Environment ba6e36000c8274703cf7786fbe8d0f6c
 import  -/  base-4.8.2.0:System.IO 0248c1e850b7ea124cf7a2e1669ebf67
 import  -/  ghc-prim-0.4.0.0:GHC.Types 6b27fb3fdbd0e3f0925a4496c66513bb
-import  -/  hlisp-0.1.0.0@hlisp_GOYMb9K7faXDOlOke6FXo9:Lib f3968d844c399f640f43d7d0b23b1ef2
-14105ff35fc672843d8619fd32c289b7
+import  -/  hlisp-0.1.0.0@hlisp_5eFb00DvSUIEQp41yemx8K:Evaluator c1d1213805ae682f78744aa1959b1d25
+import  -/  hlisp-0.1.0.0@hlisp_5eFb00DvSUIEQp41yemx8K:Parser 5e8b4e7c1dfc99148e26f00def3a9281
+import  -/  hlisp-0.1.0.0@hlisp_5eFb00DvSUIEQp41yemx8K:Repl dd3166061b093b0bd1d4aee09d6667b9
+4676f7973a1f5cd2254ca538c968e0f8
   main :: GHC.Types.IO ()
   {- Arity: 1, Strictness: <L,U>,
      Unfolding: InlineRule (0, True, True)
                 Main.main1 `cast` (Sym (GHC.Types.NTCo:IO[0] <()>_R)) -}
-2b5cbb052611bd48b65513f83a923958
+1783ff831f8265490ff2b5383f21fdc3
   main1 ::
     GHC.Prim.State# GHC.Prim.RealWorld
     -> (# GHC.Prim.State# GHC.Prim.RealWorld, () #)
   {- Arity: 1, Strictness: <L,U>,
      Unfolding: (\ s :: GHC.Prim.State# GHC.Prim.RealWorld[OneShot] ->
                  case System.Environment.getArgs1 s of ds1 { (#,#) ipv ipv1 ->
-                 GHC.IO.Handle.Text.hPutStr2
-                   GHC.IO.Handle.FD.stdout
-                   (GHC.CString.unpackAppendCString#
-                      "Hello, "#
-                      (GHC.List.$w!! @ [GHC.Types.Char] ipv1 0))
-                   GHC.Types.True
-                   ipv }) -}
-ecfcc837ef8dab1078bb47d59de877f1
-  main2 ::
+                 case GHC.List.$wlenAcc @ [GHC.Types.Char] ipv1 0 of ww2 {
+                   DEFAULT
+                   -> GHC.IO.Handle.Text.hPutStr2
+                        GHC.IO.Handle.FD.stdout
+                        Main.main2
+                        GHC.Types.True
+                        ipv
+                   0 -> Repl.runRepl1 ipv
+                   1
+                   -> Repl.runOne1
+                        (GHC.List.$w!! @ GHC.Base.String ipv1 0)
+                        ipv } }) -}
+c001727af980365e0e89d604a73425d2
+  main2 :: [GHC.Types.Char]
+  {- Unfolding: (GHC.CString.unpackCString#
+                   "Program takes only 0 or 1 argument"#) -}
+3509395473ae0a1fa969d7f178cbcbb0
+  main3 ::
     GHC.Prim.State# GHC.Prim.RealWorld
     -> (# GHC.Prim.State# GHC.Prim.RealWorld, () #)
   {- Arity: 1,

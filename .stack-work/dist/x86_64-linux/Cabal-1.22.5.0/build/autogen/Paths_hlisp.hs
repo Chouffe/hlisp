@@ -17,7 +17,7 @@ version = Version [0,1,0,0] []
 bindir, libdir, datadir, libexecdir, sysconfdir :: FilePath
 
 bindir     = "/home/chouffe/Documents/Haskell/hlisp/.stack-work/install/x86_64-linux/lts-5.11/7.10.3/bin"
-libdir     = "/home/chouffe/Documents/Haskell/hlisp/.stack-work/install/x86_64-linux/lts-5.11/7.10.3/lib/x86_64-linux-ghc-7.10.3/hlisp-0.1.0.0-GOYMb9K7faXDOlOke6FXo9"
+libdir     = "/home/chouffe/Documents/Haskell/hlisp/.stack-work/install/x86_64-linux/lts-5.11/7.10.3/lib/x86_64-linux-ghc-7.10.3/hlisp-0.1.0.0-5eFb00DvSUIEQp41yemx8K"
 datadir    = "/home/chouffe/Documents/Haskell/hlisp/.stack-work/install/x86_64-linux/lts-5.11/7.10.3/share/x86_64-linux-ghc-7.10.3/hlisp-0.1.0.0"
 libexecdir = "/home/chouffe/Documents/Haskell/hlisp/.stack-work/install/x86_64-linux/lts-5.11/7.10.3/libexec"
 sysconfdir = "/home/chouffe/Documents/Haskell/hlisp/.stack-work/install/x86_64-linux/lts-5.11/7.10.3/etc"
