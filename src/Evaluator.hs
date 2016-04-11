@@ -119,7 +119,7 @@ apply func args = maybe (throwError $ NotFunction "Unrecognized primitive functi
 eval :: Expr -> ThrowsError Expr
 eval val@(String _) = return val
 eval val@(Number _) = return val
-eval val@(Symbol _) = return val
+eval val@(Symbol _) = throwError $ Default "Environment not implemented yet..."
 eval val@(Keyword _) = return val
 eval Nil = return Nil
 eval val@(Bool _) = return val
@@ -217,3 +217,9 @@ v3 = List [ Symbol "case"
                  , Number 42
                  ]
           ]
+x1 = List [ Symbol "+"
+          , Number 32
+          -- , Number 10
+          -- , Number 2
+          ]
+

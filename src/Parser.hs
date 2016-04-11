@@ -57,6 +57,7 @@ data LispError = NumArgs Integer [Expr]
                | UnboundVar String String
                | NotFunction String String
                | Default String
+               deriving (Eq)
 
 
 instance Show LispError where
@@ -69,6 +70,7 @@ instance Show LispError where
                                       ++ ", found " ++ show found
     show (NotFunction message func) =  message ++ ": " ++ show func
     show (BadSpecialForm message form) = message ++ ": " ++ show form
+    show (Default msg) = msg
     show _ = "Default Error"
 
 
@@ -132,7 +134,7 @@ list = do
 
 expr :: Parser Expr
 expr = list
-    <|> (try nil <|> quote)
+    <|> (try quote <|> nil)
     <|> anyString
     <|> number
     <|> boolean
