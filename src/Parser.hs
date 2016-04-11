@@ -27,6 +27,7 @@ import Control.Monad.Error
 import Control.Monad.Except
 import Data.List (  intersperse
                   , intercalate)
+import Data.IORef
 
 
 data Expr = List [Expr]
@@ -49,6 +50,10 @@ instance Show Expr where
     show (Keyword kw)    = ":" ++ kw
     show (List expr)    = "(" ++ (intercalate " " (map show expr)) ++ ")"
 
+type Env = IORef [(String, IORef Expr)]
+
+nullEnv :: IO Env
+nullEnv = newIORef []
 
 data LispError = NumArgs Integer [Expr]
                | TypeMismatch String Expr
@@ -79,7 +84,61 @@ instance Error LispError where
     strMsg = Default
 
 
+
 type ThrowsError = Either LispError
+type IOThrowsError = ErrorT LispError IO
+
+liftThrows :: ThrowsError a -> IOThrowsError a
+liftThrows (Right val) = return val
+liftThrows (Left err) = throwError err
+
+
+runIOThrows :: IOThrowsError String -> IO String
+runIOThrows action = runErrorT (trapError action) >>= return . extractVal
+
+isBound :: Env -> String -> IO Bool
+isBound envRef var = readIORef envRef >>= return . maybe False (const True) . lookup var
+-- isBound env varname = do
+--     env2 <- readIORef env
+--     case lookup varname env2 of
+--         Just _ -> return True
+--         _      -> return False
+
+getVar :: Env -> String -> IOThrowsError Expr
+getVar envRef var = do env <- liftIO $ readIORef envRef
+                       maybe (throwError $ UnboundVar "Unbound variable" var)
+                             (liftIO . readIORef)
+                             (lookup var env)
+
+setVar :: Env -> String -> Expr -> IOThrowsError Expr
+setVar envRef var value = do env <- liftIO $ readIORef envRef
+                             maybe (throwError $ UnboundVar "Unbound variable" var)
+                                   (liftIO . (flip writeIORef value))
+                                   (lookup var env)
+                             return value
+
+defineVar :: Env -> String -> Expr -> IOThrowsError Expr
+defineVar envRef var value = do
+    alreadyDefined <- liftIO $ isBound envRef var
+    if alreadyDefined
+    then setVar envRef var value
+    else liftIO $ do
+        valueRef <- newIORef value
+        env      <- readIORef envRef
+        writeIORef envRef ((var, valueRef) : env)
+        return value
+
+bindVars :: Env -> [(String, Expr)] -> IO Env
+bindVars envRef bindings = readIORef envRef >>= extendEnv bindings >>= newIORef
+     where extendEnv bindings env = liftM (++ env) (mapM addBinding bindings)
+           addBinding (var, value) = do ref <- newIORef value
+                                        return (var, ref)
+-- bindVars envRef [] = return envRef
+-- bindVars envRef ((s, e):bindings) = do
+--     valueRef <- newIORef e
+--     env      <- readIORef envRef
+--     writeIORef envRef ((s, valueRef) : env)
+--     bindVars envRef bindings
 
 trapError action = catchError action (return . show)
 
