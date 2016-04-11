@@ -1,7 +1,8 @@
 module Parser where
 
 import Text.ParserCombinators.Parsec (  Parser
-                                      , parse )
+                                      , parse
+                                      , ParseError )
 import Text.Parsec (  letter
                     , noneOf
                     , many
@@ -20,76 +21,117 @@ import Text.Parsec (  letter
                    )
 import Control.Applicative hiding (many)
 import Control.Monad
+import Control.Monad.Error
+-- import Control.Monad.Error.Class
+-- import Control.Monad.Trans.Except (Error)
+import Control.Monad.Except
 import Data.List (  intersperse
                   , intercalate)
 
-data Term = List [Term]
+
+data Expr = List [Expr]
           | Number Integer
           | String String
           | Symbol String
           | Keyword String
-          | Quote Term
           | Nil
           | Bool Bool
+          deriving (Eq)
 
-instance Show Term where
+
+instance Show Expr where
     show (Bool True)     = "#t"
     show (Bool False)    = "#f"
     show (Number x)      = show x
     show Nil             = "nil"
     show (String s)      = "\"" ++ s ++ "\""
     show (Symbol s)      = s
-    show (Quote e)       = "'" ++ show e
     show (Keyword kw)    = ":" ++ kw
-    show (List terms)    = "(" ++ (intercalate " " (map show terms)) ++ ")"
+    show (List expr)    = "(" ++ (intercalate " " (map show expr)) ++ ")"
 
-nil :: Parser Term
+
+data LispError = NumArgs Integer [Expr]
+               | TypeMismatch String Expr
+               | Parser ParseError
+               | BadSpecialForm String Expr
+               | UnboundVar String String
+               | NotFunction String String
+               | Default String
+
+
+instance Show LispError where
+    show (UnboundVar msg varname) = msg ++ ": " ++ varname
+    show (NumArgs n exprs) = "Expected " ++ show n
+                          ++ " args; found values "
+                          ++ (unwords $ map show exprs)
+    show (TypeMismatch expected found) = "Invalid Type: expected "
+                                      ++ expected
+                                      ++ ", found " ++ show found
+    show (NotFunction message func) =  message ++ ": " ++ show func
+    show (BadSpecialForm message form) = message ++ ": " ++ show form
+    show _ = "Default Error"
+
+
+instance Error LispError where
+    noMsg = Default "An error has occured"
+    strMsg = Default
+
+
+type ThrowsError = Either LispError
+
+trapError action = catchError action (return . show)
+
+extractVal :: ThrowsError a -> a
+extractVal (Right val) = val
+
+
+nil :: Parser Expr
 nil = (string "nil" <|> string "'()") >> return Nil
 
-number :: Parser Term
+number :: Parser Expr
 number = fmap (Number . read) (many1 digit)
 
-false :: Parser Term
+false :: Parser Expr
 false = string "f" >> return (Bool False)
 
-true :: Parser Term
+true :: Parser Expr
 true = string "t" >> return (Bool True)
 
-boolean :: Parser Term
+boolean :: Parser Expr
 boolean = char '#' >> (false <|> true)
 
 specialChar :: Parser Char
 specialChar = oneOf "!#$%&|*+-/<=>?@^_~"
 
-symbol :: Parser Term
+symbol :: Parser Expr
 symbol = do
     h <- letter <|> specialChar
     t <- many (digit <|> letter <|> specialChar)
     return $ Symbol (h:t)
 
-keyword :: Parser Term
+keyword :: Parser Expr
 keyword = do
     char ':'
     (Symbol s) <- symbol
     return $ Keyword s
 
-anyString :: Parser Term
+anyString :: Parser Expr
 anyString = do
     char '"'
     s <- manyTill anyChar (char '"')
     return $ String s
 
-list :: Parser Term
+list :: Parser Expr
 list = do
     char '('
     spaces
-    terms <- sepBy term spaces
+    expr <- sepBy expr spaces
     spaces
     char ')'
-    return $ List terms
+    return $ List expr
 
-term :: Parser Term
-term = list
+expr :: Parser Expr
+expr = list
     <|> (try nil <|> quote)
     <|> anyString
     <|> number
@@ -98,13 +140,18 @@ term = list
     <|> symbol
     <|> anyString
 
-quote :: Parser Term
+quote :: Parser Expr
 quote = do
     char '\''
-    t <- term
-    return $ Quote t
+    t <- expr
+    return $ List [Symbol "quote", t]
 
-readExpr :: String -> String
-readExpr input = case parse term "lisp" input of
-    Left err  -> "No match:" ++ show err
-    Right val -> "Found value: " ++ show val
+readExpr :: String -> ThrowsError Expr
+readExpr input = case parse expr "lisp" input of
+    Left err  -> throwError $ Parser err
+    Right val -> return val
+
+-- readExpr :: String -> Expr
+-- readExpr input = case parse expr "lisp" input of
+--     Left err  -> String $ "Error found: " ++ show err
+--     Right val -> val

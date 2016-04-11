@@ -16,10 +16,13 @@ cabal-version:       >=1.10
 library
   hs-source-dirs:      src
   exposed-modules:     Lib
+                    ,  Parser
+                    , Evaluator
   build-depends:       base >= 4.7 && < 5
                      , text
                      , ghc-mod >= 5.0
                      , parsec >= 3.1.9
+                     , mtl >= 2.2
   default-language:    Haskell2010
 
 executable hlisp-exe

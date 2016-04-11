@@ -3,9 +3,11 @@ import System.Environment
 
 import Lib
 import Parser
+import Evaluator
+import Control.Monad
 
 main :: IO ()
--- main = someFunc
 main = do
     args <- getArgs
-    putStrLn ("Hello, " ++ args !! 0)
+    evaled <- return $ liftM show $ readExpr (head args) >>= eval
+    putStrLn $ extractVal $ trapError evaled
