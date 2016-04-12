@@ -24,6 +24,9 @@ library
                      , ghc-mod >= 5.0
                      , parsec >= 3.1.9
                      , mtl >= 2.2
+                     , containers >= 0.5.6.1
+                     , vector
+                     , hashmap
   default-language:    Haskell2010
 
 executable hlisp-exe

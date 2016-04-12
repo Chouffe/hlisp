@@ -4,6 +4,7 @@ import Text.ParserCombinators.Parsec (  Parser
                                       , parse
                                       , ParseError )
 import Text.Parsec (  letter
+                    , notFollowedBy
                     , noneOf
                     , many
                     , manyTill
@@ -26,19 +27,54 @@ import Control.Monad.Error
 -- import Control.Monad.Trans.Except (Error)
 import Control.Monad.Except
 import Data.List (  intersperse
-                  , intercalate)
+                  , intercalate
+                  , nub
+                  )
 import Data.IORef
-
+import qualified Data.Set as S
+import qualified Data.Vector as V
+import qualified Data.HashMap as H
 
 data Expr = List [Expr]
+          | Vector (V.Vector Expr)
+          | Set (S.Set Expr)
+          | Hashmap (H.Map Expr Expr)
           | Number Integer
           | String String
           | Symbol String
           | Keyword String
           | Nil
           | Bool Bool
-          deriving (Eq)
+          | PrimitiveFunc { name :: String
+                          , fn   :: [Expr] -> ThrowsError Expr
+          }
+          | Closure { params :: [String]
+                    , vararg :: Maybe String
+                    , body   :: [Expr]
+                    , env    :: Env
+          }
 
+instance Eq Expr where
+    (==) (Number x) (Number y) = x == y
+    (==) (Bool x) (Bool y) = x == y
+    (==) Nil Nil = True
+    (==) (String x) (String y) = x == y
+    (==) (Symbol x) (Symbol y) = x == y
+    (==) (Keyword x) (Keyword y) = x == y
+    -- TODO: fixme -> this is wrong
+    (==) (List xs) (List ys) = and $ zipWith (==) xs ys
+    (==) (Vector xs) (Vector ys) = xs == ys
+    (==) (Hashmap h) (Hashmap t) = h == t
+    (==) (Set xs) (Set ys) = xs == ys
+    (==) PrimitiveFunc { name = name1 }
+         PrimitiveFunc { name = name2 } = name1 == name2
+    (==) Closure { params = ps1 , vararg = v1 , body = b1 , env = env1 }
+         Closure { params = ps2 , vararg = v2 , body = b2 , env = env2 } = and [ ps1 == ps2
+                                                                               , v1 == v2
+                                                                               , b1 == b2
+                                                                               , env1 == env2
+                                                                               ]
+    (==) _ _ = False
 
 instance Show Expr where
     show (Bool True)     = "#t"
@@ -48,7 +84,15 @@ instance Show Expr where
     show (String s)      = "\"" ++ s ++ "\""
     show (Symbol s)      = s
     show (Keyword kw)    = ":" ++ kw
-    show (List expr)    = "(" ++ (intercalate " " (map show expr)) ++ ")"
+    show (List expr)     = "(" ++ (intercalate " " (map show expr)) ++ ")"
+    show (Vector expr)    = "[" ++ (intercalate " " (map show (V.toList expr))) ++ "]"
+    show (Hashmap h)    = "{" ++ (intercalate " " (map (\ (k, v) -> show k ++ " " ++ show v) (H.assocs h))) ++ "}"
+    show (Set expr)    = "#{" ++ (intercalate " " (map show (S.elems expr))) ++ "}"
+    show PrimitiveFunc {name = functionName} = "<built-in-lambda: " ++ functionName ++ ">"
+    show Closure {params = args, vararg = varargs, body = body, env = env} = "(lambda (" ++ unwords (map show args)
+         ++ (case varargs of
+                 Nothing  -> ""
+                 Just arg -> " . " ++ arg) ++ ") ...)" -- TODO: Add the body here
 
 type Env = IORef [(String, IORef Expr)]
 
@@ -64,7 +108,6 @@ data LispError = NumArgs Integer [Expr]
                | Default String
                deriving (Eq)
 
-
 instance Show LispError where
     show (UnboundVar msg varname) = msg ++ ": " ++ varname
     show (NumArgs n exprs) = "Expected " ++ show n
@@ -75,6 +118,7 @@ instance Show LispError where
                                       ++ ", found " ++ show found
     show (NotFunction message func) =  message ++ ": " ++ show func
     show (BadSpecialForm message form) = message ++ ": " ++ show form
+    show (Parser pe) = show pe
     show (Default msg) = msg
     show _ = "Default Error"
 
@@ -82,7 +126,6 @@ instance Show LispError where
 instance Error LispError where
     noMsg = Default "An error has occured"
     strMsg = Default
-
 
 
 type ThrowsError = Either LispError
@@ -98,11 +141,6 @@ runIOThrows action = runErrorT (trapError action) >>= return . extractVal
 
 isBound :: Env -> String -> IO Bool
 isBound envRef var = readIORef envRef >>= return . maybe False (const True) . lookup var
--- isBound env varname = do
---     env2 <- readIORef env
---     case lookup varname env2 of
---         Just _ -> return True
---         _      -> return False
 
 getVar :: Env -> String -> IOThrowsError Expr
 getVar envRef var = do env <- liftIO $ readIORef envRef
@@ -145,9 +183,17 @@ trapError action = catchError action (return . show)
 extractVal :: ThrowsError a -> a
 extractVal (Right val) = val
 
+specialChar :: Parser Char
+specialChar = oneOf "!#$%&|*+-/<=>?@^_~"
+
+nilSymbol :: Parser Expr
+nilSymbol = string "nil" >> notFollowedBy specialChar >> return Nil
+
+nilEmptyList :: Parser Expr
+nilEmptyList = string "'()" >> return Nil
 
 nil :: Parser Expr
-nil = (string "nil" <|> string "'()") >> return Nil
+nil = nilSymbol <|> nilEmptyList
 
 number :: Parser Expr
 number = fmap (Number . read) (many1 digit)
@@ -160,9 +206,6 @@ true = string "t" >> return (Bool True)
 
 boolean :: Parser Expr
 boolean = char '#' >> (false <|> true)
-
-specialChar :: Parser Char
-specialChar = oneOf "!#$%&|*+-/<=>?@^_~"
 
 symbol :: Parser Expr
 symbol = do
@@ -182,6 +225,7 @@ anyString = do
     s <- manyTill anyChar (char '"')
     return $ String s
 
+-- TODO: FIXME for strings like (1 2 )
 list :: Parser Expr
 list = do
     char '('
@@ -191,15 +235,60 @@ list = do
     char ')'
     return $ List expr
 
+vector :: Parser Expr
+vector = do
+    char '['
+    spaces
+    expr <- sepBy expr spaces
+    spaces
+    char ']'
+    return $ Vector (V.fromList expr)
+
+set :: Parser Expr
+set = do
+    string "#{"
+    spaces
+    expr <- sepBy expr spaces
+    spaces
+    char '}'
+    if (nub expr) == expr
+    then return $ Set (S.fromDistinctAscList expr)
+    else fail ("Duplicate elements in set: #{" ++ (intercalate " " (map show expr)) ++ "}")
+
+-- TODO: check uniq keys
+-- TODO: use hashmap under the hood
+
+hashmapEntry :: Parser Expr
+hashmapEntry = do
+    key <- expr
+    spaces
+    val <- expr
+    return $ List [key, val]
+
+hashmap :: Parser Expr
+hashmap = do
+    char '{'
+    spaces
+    keyvals <- sepBy hashmapEntry spaces
+    spaces
+    char '}'
+    let keys = (map (\ (List [k, _] ) -> k) keyvals)
+    if (nub keys) == keys
+    then return $ List [Symbol "quote", List keyvals]
+    else fail ("Duplicate entry in hashmap")
+
 expr :: Parser Expr
 expr = list
-    <|> (try quote <|> nil)
-    <|> anyString
-    <|> number
-    <|> boolean
-    <|> keyword
-    <|> symbol
-    <|> anyString
+        <|> vector
+        <|> set
+        <|> hashmap
+        <|> (try nil <|> quote <|> symbol)
+        <|> symbol
+        <|> anyString
+        <|> number
+        <|> boolean
+        <|> keyword
+        <|> anyString
 
 quote :: Parser Expr
 quote = do

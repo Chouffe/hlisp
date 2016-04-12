@@ -1,16 +1,21 @@
 {-# LANGUAGE ExistentialQuantification #-}
 module Evaluator where
 
+import qualified Data.Set as S
+import qualified Data.Vector as V
+import qualified Data.HashMap as H
+
 import Control.Monad
 import Control.Monad.Error
 import Parser
+import Data.List (nub)
 
 unpackNum :: Expr -> ThrowsError Integer
 unpackNum (Number n) = return n
 unpackNum (String n) = let parsed = reads n :: [(Integer, String)] in
                            if null parsed
                               then throwError $ TypeMismatch "number" $ String n
-                              else return $ fst $ parsed !! 0
+                              else return $ fst $ head parsed
 unpackNum (List [n]) = unpackNum n
 unpackNum notNum = throwError $ TypeMismatch "number" notNum
 
@@ -27,7 +32,7 @@ unpackBool notBool  = throwError $ TypeMismatch "boolean" notBool
 boolBinop :: (Expr -> ThrowsError a) -> (a -> a -> Bool) -> [Expr] -> ThrowsError Expr
 boolBinop unpacker op args = if length args /= 2
                              then throwError $ NumArgs 2 args
-                             else do left <- unpacker $ args !! 0
+                             else do left <- unpacker $ head args
                                      right <- unpacker $ args !! 1
                                      return $ Bool $ left `op` right
 
@@ -44,16 +49,21 @@ boolBoolBinop = boolBinop unpackBool
 -- evalExpr (expr:_) = eval expr
 
 isString :: [Expr] -> ThrowsError Expr
-isString ((String _ ) : []) = return $ Bool True
+isString [String _] = return $ Bool True
 isString _ = return $ Bool False
 
 isSymbol :: [Expr] -> ThrowsError Expr
-isSymbol ((Symbol _ ) : []) = return $ Bool True
+isSymbol [Symbol _] = return $ Bool True
 isSymbol _ = return $ Bool False
 
 isNumber :: [Expr] -> ThrowsError Expr
-isNumber ((Number _) : []) = return $ Bool True
+isNumber [Number _] = return $ Bool True
 isNumber _ = return $ Bool False
+
+isNil :: [Expr] -> ThrowsError Expr
+isNil (Nil:[]) = return $ Bool True
+isNil [Symbol "quote", List []] = return $ Bool True
+isNil _ = return $ Bool False
 
 cdr :: [Expr] -> ThrowsError Expr
 cdr [List (x : xs )] = return $ List xs
@@ -64,14 +74,14 @@ car [List (x : xs)] = return x
 car badArg = throwError $ NumArgs 1 badArg
 
 cons :: [Expr] -> ThrowsError Expr
-cons [expr, (List exprs)] = return $ List (expr : exprs)
+cons [expr, List exprs] = return $ List (expr : exprs)
 cons badArg = throwError $ NumArgs 2 badArg
 
 eqv :: [Expr] -> ThrowsError Expr
-eqv [(Bool arg1), (Bool arg2)]             = return $ Bool $ arg1 == arg2
-eqv [(Number arg1), (Number arg2)]         = return $ Bool $ arg1 == arg2
-eqv [(String arg1), (String arg2)]         = return $ Bool $ arg1 == arg2
-eqv [(List arg1), (List arg2)]             = return $ Bool $ (length arg1 == length arg2) &&
+eqv [Bool arg1, Bool arg2]             = return $ Bool $ arg1 == arg2
+eqv [Number arg1, Number arg2]         = return $ Bool $ arg1 == arg2
+eqv [String arg1, String arg2]         = return $ Bool $ arg1 == arg2
+eqv [List arg1, List arg2]             = return $ Bool $ (length arg1 == length arg2) &&
                                                              (all eqvPair $ zip arg1 arg2)
      where eqvPair (x1, x2) = case eqv [x1, x2] of
                                 Left err -> False
@@ -104,12 +114,23 @@ primitives = [
              , ("string?", isString)
              , ("number?", isString)
              , ("symbol?", isString)
+             -- , ("seq?",    isNil)
+             , ("nil?",    isNil)
 
              -- Arithmetic
              , ("+", numericBinop (+))
              , ("-", numericBinop (-))
              , ("/", numericBinop div)
              , ("*", numericBinop (*))]
+
+primitiveBindings :: IO Env
+primitiveBindings = nullEnv >>= (flip bindVars $ map makePrimitiveFunc primitives)
+    where makePrimitiveFunc (var, func) = (var, PrimitiveFunc { name = var, fn = func })
+
+makeClosure :: (Maybe String) -> Env -> [Expr] -> [Expr] -> IOThrowsError Expr
+makeClosure varargs env params body = return $ Closure (map show params) varargs body env
+makeNormalClosure = makeClosure Nothing
+-- makeVarArgsClosure = makeClosure . Just . show
 
 
 eval :: Env -> Expr -> IOThrowsError Expr
@@ -119,6 +140,13 @@ eval _ val@(Keyword _) = return val
 eval _ Nil = return Nil
 eval _ val@(Bool _) = return val
 eval env val@(Symbol var) = getVar env var
+eval env (Vector xs) = mapM (eval env) xs >>= return . Vector
+eval env (Set xs) = mapM (eval env) (S.elems xs) >>= return . Set . S.fromDistinctAscList . nub
+-- eval env (Hashmap h) = mapM (\ (k, v) -> do key <- eval env k
+--                                             val <- eval env v
+--                                             return $ (key, val))
+--                                             (H.toList h) >>= return . Hashmap . H.fromList . nub
+-- TODO: Add an ORD typeclass instance to Expr
 
 -- -------------
 -- Special forms
@@ -126,6 +154,12 @@ eval env val@(Symbol var) = getVar env var
 
 -- Def
 eval env (List [Symbol "def", (Symbol var), expr]) = eval env expr >>= defineVar env var
+
+-- Defn
+eval env (List ((Symbol "defn") : List (Symbol var : params) : body )) = makeNormalClosure env params body >>= defineVar env var
+
+-- Lambda
+eval env (List (Symbol "lambda" : List params : body)) = makeNormalClosure env params body
 
 -- Quote
 eval _ (List [Symbol "quote", expr]) = return expr
@@ -176,16 +210,26 @@ eval env (List ((Symbol "or") : expr : exprs)) = do
         _ -> eval env (List ((Symbol "or") : exprs))
 
 -- Function application
-eval env (List (Symbol fun : args)) = mapM (eval env) args >>= liftThrows . apply fun
+eval env (List (fun : args)) = do
+    func <- eval env fun
+    argVals <- mapM (eval env) args
+    apply func argVals
 
 
 eval _ badForm = throwError $ BadSpecialForm "Unrecognized special form" badForm
 
-apply :: String -> [Expr] -> ThrowsError Expr
-apply func args = maybe (throwError $ NotFunction "Unrecognized primitive function args" func)
-                        ($ args)
-                        (lookup func primitives)
-
+apply :: Expr -> [Expr] -> IOThrowsError Expr
+apply (PrimitiveFunc {name = name, fn = func }) args = liftThrows $ func args
+apply (Closure { params = params, vararg = vararg, body = body, env = env }) args =
+        if num params /= num args && vararg == Nothing
+        then throwError $ NumArgs (num params) args
+        else (liftIO $ bindVars env $ zip params args) >>= bindVarArgs vararg >>= evalBody
+    where remainingArgs = drop (length params) args
+          num = toInteger . length
+          evalBody env = liftM last $ mapM (eval env) body
+          bindVarArgs arg env = case arg of
+              Just argName -> liftIO $ bindVars env [(argName, List $ remainingArgs)]
+              Nothing      -> return env
 
 x = List [Symbol "quote", List [(Symbol "+"), Number 10, Number 32]]
 y = List [ Symbol "if"
@@ -229,3 +273,15 @@ x1 = List [ Symbol "+"
           -- , Number 2
           ]
 
+l = List [ Symbol "lambda"
+         , List [ Symbol "x" ]
+         , List [ Symbol "+"
+                , Number 1
+                , Symbol "x"
+                ]
+         ]
+
+inc = "(lambda (x) (+ x 1))"
+factorial = "(defn (factorial n) (if (= n 1) 1 (* n (factorial (- n 1)))))"
+mMap = "(defn (map f xs))"
+n = List [Symbol "quote", List []]
