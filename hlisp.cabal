@@ -27,6 +27,9 @@ library
                      , containers >= 0.5.6.1
                      , vector
                      , hashmap
+                     -- TODO: remove
+                     , QuickCheck >= 2.8
+                     , HUnit
   default-language:    Haskell2010
 
 executable hlisp-exe
@@ -43,7 +46,11 @@ test-suite hlisp-test
   main-is:             Spec.hs
   build-depends:       base
                      , hlisp
+                     , containers >= 0.5.6.1
+                     , vector
+                     , hashmap
                      , QuickCheck >= 2.8
+                     , HUnit
   ghc-options:         -threaded -rtsopts -with-rtsopts=-N
   default-language:    Haskell2010
 

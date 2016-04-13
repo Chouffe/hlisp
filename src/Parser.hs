@@ -16,6 +16,7 @@ import Text.Parsec (  letter
                     , space
                     , spaces
                     , sepBy
+                    , sepEndBy
                     , many1
                     , skipMany1
                     , try
@@ -225,38 +226,26 @@ anyString = do
     s <- manyTill anyChar (char '"')
     return $ String s
 
--- TODO: FIXME for strings like (1 2 )
+parens :: String -> String -> Parser Expr -> ([Expr] -> Parser Expr) -> Parser Expr
+parens opening closing separator constructor = do
+    string opening
+    spaces
+    expr <- sepEndBy separator spaces
+    spaces
+    string closing
+    constructor expr
+
 list :: Parser Expr
-list = do
-    char '('
-    spaces
-    expr <- sepBy expr spaces
-    spaces
-    char ')'
-    return $ List expr
+list = parens "(" ")" expr (return . List)
 
 vector :: Parser Expr
-vector = do
-    char '['
-    spaces
-    expr <- sepBy expr spaces
-    spaces
-    char ']'
-    return $ Vector (V.fromList expr)
+vector = parens "[" "]" expr (return . Vector . V.fromList)
 
 set :: Parser Expr
-set = do
-    string "#{"
-    spaces
-    expr <- sepBy expr spaces
-    spaces
-    char '}'
-    if (nub expr) == expr
-    then return $ Set (S.fromDistinctAscList expr)
-    else fail ("Duplicate elements in set: #{" ++ (intercalate " " (map show expr)) ++ "}")
-
--- TODO: check uniq keys
--- TODO: use hashmap under the hood
+set = parens "#{" "}" expr
+            (\ expr -> if (nub expr) == expr
+                       then return $ Set (S.fromDistinctAscList expr)
+                       else fail ("Duplicate elements in set: #{" ++ (intercalate " " (map show expr)) ++ "}"))
 
 hashmapEntry :: Parser Expr
 hashmapEntry = do
@@ -266,16 +255,11 @@ hashmapEntry = do
     return $ List [key, val]
 
 hashmap :: Parser Expr
-hashmap = do
-    char '{'
-    spaces
-    keyvals <- sepBy hashmapEntry spaces
-    spaces
-    char '}'
-    let keys = (map (\ (List [k, _] ) -> k) keyvals)
-    if (nub keys) == keys
-    then return $ List [Symbol "quote", List keyvals]
-    else fail ("Duplicate entry in hashmap")
+hashmap = parens "{" "}" hashmapEntry (\ keyvals -> let keys = (map (\ (List [k, _] ) -> k) keyvals)
+                                                    in
+                                                        if (nub keys) == keys
+                                                        then return $ List [Symbol "quote", List keyvals]
+                                                        else fail ("Duplicate entry in hashmap"))
 
 expr :: Parser Expr
 expr = list
