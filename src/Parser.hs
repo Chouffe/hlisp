@@ -10,6 +10,7 @@ import Text.Parsec (  letter
                     , manyTill
                     , digit
                     , char
+                    , endBy
                     , anyChar
                     , string
                     , oneOf
@@ -35,6 +36,7 @@ import Data.IORef
 import qualified Data.Set as S
 import qualified Data.Vector as V
 import qualified Data.HashMap as H
+import System.IO (Handle)
 
 data Expr = List [Expr]
           | Vector (V.Vector Expr)
@@ -46,6 +48,10 @@ data Expr = List [Expr]
           | Keyword String
           | Nil
           | Bool Bool
+          | IOPrimitiveFunc { name :: String
+                            , iofn   :: [Expr] -> IOThrowsError Expr
+          }
+          | Port Handle
           | PrimitiveFunc { name :: String
                           , fn   :: [Expr] -> ThrowsError Expr
           }
@@ -85,11 +91,13 @@ instance Show Expr where
     show (String s)      = "\"" ++ s ++ "\""
     show (Symbol s)      = s
     show (Keyword kw)    = ":" ++ kw
+    show (Port _)        = "<io port>"
     show (List expr)     = "(" ++ (intercalate " " (map show expr)) ++ ")"
     show (Vector expr)    = "[" ++ (intercalate " " (map show (V.toList expr))) ++ "]"
     show (Hashmap h)    = "{" ++ (intercalate " " (map (\ (k, v) -> show k ++ " " ++ show v) (H.assocs h))) ++ "}"
     show (Set expr)    = "#{" ++ (intercalate " " (map show (S.elems expr))) ++ "}"
     show PrimitiveFunc {name = functionName} = "<built-in-lambda: " ++ functionName ++ ">"
+    show IOPrimitiveFunc {name = functionName} = "<built-in-io-lambda: " ++ functionName ++ ">"
     show Closure {params = args, vararg = varargs, body = body, env = env} = "(lambda (" ++ unwords (map show args)
          ++ (case varargs of
                  Nothing  -> ""
@@ -279,10 +287,15 @@ quote = do
     t <- expr
     return $ List [Symbol "quote", t]
 
-readExpr :: String -> ThrowsError Expr
-readExpr input = case parse expr "lisp" input of
+readOrThrow :: Parser a -> String -> ThrowsError a
+readOrThrow parser input = case parse parser "lisp" input of
     Left err  -> throwError $ Parser err
     Right val -> return val
+
+readExpr :: String -> ThrowsError Expr
+readExpr = readOrThrow expr
+
+readExprList = readOrThrow (endBy expr spaces)
 
 -- readExpr :: String -> Expr
 -- readExpr input = case parse expr "lisp" input of

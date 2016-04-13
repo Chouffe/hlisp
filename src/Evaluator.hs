@@ -9,6 +9,7 @@ import Control.Monad
 import Control.Monad.Error
 import Parser
 import Data.List (nub)
+import System.IO (hPrint, stdout)
 
 unpackNum :: Expr -> ThrowsError Integer
 unpackNum (Number n) = return n
@@ -66,6 +67,7 @@ isNil [Symbol "quote", List []] = return $ Bool True
 isNil _ = return $ Bool False
 
 cdr :: [Expr] -> ThrowsError Expr
+cdr [List (x : [])] = return $ Nil
 cdr [List (x : xs )] = return $ List xs
 cdr badArg = throwError $ NumArgs 1 badArg
 
@@ -74,6 +76,7 @@ car [List (x : xs)] = return x
 car badArg = throwError $ NumArgs 1 badArg
 
 cons :: [Expr] -> ThrowsError Expr
+cons [expr, Nil] = return $ List [expr]
 cons [expr, List exprs] = return $ List (expr : exprs)
 cons badArg = throwError $ NumArgs 2 badArg
 
@@ -88,6 +91,25 @@ eqv [List arg1, List arg2]             = return $ Bool $ (length arg1 == length 
                                 Right (Bool val) -> val
 eqv [_, _]                                 = return $ Bool False
 eqv badArgList                             = throwError $ NumArgs 2 badArgList
+
+ioPrimitives :: [(String, [Expr] -> IOThrowsError Expr)]
+ioPrimitives = [ ("slurp", readContents)
+               , ("spit", writeProc)
+               , ("apply", applyProc)]
+
+readContents :: [Expr] -> IOThrowsError Expr
+readContents [String filename] = liftM String $ liftIO $ readFile filename
+
+writeProc :: [Expr] -> IOThrowsError Expr
+writeProc [obj]            = writeProc [obj, Port stdout]
+writeProc [obj, Port port] = liftIO $ hPrint port obj >> (return $ Bool True)
+
+applyProc :: [Expr] -> IOThrowsError Expr
+applyProc [func, List args] = apply func args
+applyProc (func:args) = apply func args
+
+load :: String -> IOThrowsError [Expr]
+load filename = (liftIO $ readFile filename) >>= liftThrows . readExprList
 
 primitives :: [(String, [Expr] -> ThrowsError Expr)]
 primitives = [
@@ -124,8 +146,10 @@ primitives = [
              , ("*", numericBinop (*))]
 
 primitiveBindings :: IO Env
-primitiveBindings = nullEnv >>= (flip bindVars $ map makePrimitiveFunc primitives)
+primitiveBindings = nullEnv >>= (flip bindVars $ map makePrimitiveFunc primitives
+                                               ++ map makePrimitiveIOFunc ioPrimitives)
     where makePrimitiveFunc (var, func) = (var, PrimitiveFunc { name = var, fn = func })
+          makePrimitiveIOFunc (var, func) = (var, IOPrimitiveFunc { name = var, iofn = func })
 
 makeClosure :: (Maybe String) -> Env -> [Expr] -> [Expr] -> IOThrowsError Expr
 makeClosure varargs env params body = return $ Closure (map show params) varargs body env
@@ -151,6 +175,10 @@ eval env (Set xs) = mapM (eval env) (S.elems xs) >>= return . Set . S.fromDistin
 -- -------------
 -- Special forms
 -- -------------
+
+-- Load
+eval env (List [Symbol "load", String filename]) =
+     load filename >>= liftM last . mapM (eval env)
 
 -- Def
 eval env (List [Symbol "def", (Symbol var), expr]) = eval env expr >>= defineVar env var
@@ -219,6 +247,7 @@ eval env (List (fun : args)) = do
 eval _ badForm = throwError $ BadSpecialForm "Unrecognized special form" badForm
 
 apply :: Expr -> [Expr] -> IOThrowsError Expr
+apply (IOPrimitiveFunc { name = name, iofn = func }) args = func args
 apply (PrimitiveFunc {name = name, fn = func }) args = liftThrows $ func args
 apply (Closure { params = params, vararg = vararg, body = body, env = env }) args =
         if num params /= num args && vararg == Nothing

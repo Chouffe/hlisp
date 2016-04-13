@@ -1,0 +1,62 @@
+(defn (>= x y)
+  (or (> x y) (= x y)))
+
+(defn (<= x y)
+  (or (< x y) (= x y)))
+
+(defn (map f xs)
+  (if (nil? xs)
+      nil
+      (cons (f (car xs)) (map f (cdr xs)))))
+
+(defn (map f)
+  (lambda (xs)
+    (if (nil? xs)
+      nil
+      (cons (f (car xs)) ((map f) (cdr xs))))))
+
+(defn (reduce f)
+  (lambda (x0)
+    (lambda (xs)
+      (if (nil? xs)
+        x0
+        (((reduce f) (f x0 (car xs))) (cdr xs))))))
+
+(defn (filter pred)
+  (lambda (xs)
+    (cond
+      ((nil? xs)                      nil)
+      ((pred (car xs)) (cons (car xs) ((filter pred) (cdr xs))))
+      (#t                             ((filter pred) (cdr xs))))))
+
+(defn (not x)
+  (if x #f #t))
+
+(defn (complement f)
+  (lambda (x)
+    (not (f x))))
+
+(defn (remove pred)
+  (filter (complement pred)))
+
+(def sum ((reduce +) 0))
+
+(defn (range start)
+  (lambda (end)
+    (if (>= start end)
+      nil
+      (cons start ((range (+ start 1)) end)))))
+
+(defn (count xs)
+  (if (nil? xs)
+      0
+      (+ 1 (count (cdr xs)))))
+
+(defn (comp f)
+  (lambda (g)
+    (lambda (x)
+      (f (g x)))))
+
+(defn (inc x) (+ x 1))
+
+(defn (dec x) (- x 1))
