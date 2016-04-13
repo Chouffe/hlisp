@@ -11,7 +11,7 @@ import qualified Data.HashMap as H
 
 -- test1 = TestCase (assertEqual "for (foo 3)," (1,2) (1 + 3, 2))
 
--- HUnit
+-- HUnit -> Those tests are not necessary (see quickcheck below)
 parsingTests =  test [ "List" ~: "(+ 1 2)" ~: readExpr "(+ 1 2)" ~=? Right (List [Symbol "+", Number 1, Number 2])
                      , "List" ~: "( +  1   2)" ~: readExpr "( +  1   2)" ~=? Right (List [Symbol "+", Number 1, Number 2])
                      , "List" ~: "(+ 1 2 )" ~: readExpr "(+ 1 2 )" ~=? Right (List [Symbol "+", Number 1, Number 2])

@@ -4,6 +4,7 @@ import Control.Monad
 import Evaluator
 import Parser
 import System.IO
+import Data.IORef
 
 
 flushStr :: String -> IO ()
@@ -30,3 +31,18 @@ runOne expr = primitiveBindings >>= flip evalAndPrint expr
 
 runRepl :: IO ()
 runRepl = primitiveBindings >>= until_ (== "quit") (readPrompt "Lisp>>> ") . evalAndPrint
+
+runRepl2 :: IO Env -> [(String, String)] -> IO ()
+runRepl2 env history = do
+    result <- (readPrompt "Lisp > ")
+    case result of
+        ""     -> runRepl2 env history
+        "quit" -> return ()
+        expr   -> do bindings <- env
+                     let e = readExpr expr
+                     evaled   <- evalString bindings expr
+                     putStrLn evaled
+                     ref      <- readIORef bindings
+                     valStar1 <- newIORef (extractVal e)
+                     runRepl2 (newIORef (("*1", valStar1) : ref))
+                              ((expr, evaled) : history)
