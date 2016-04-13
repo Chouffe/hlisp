@@ -3,13 +3,15 @@ import Test.HUnit
 
 import Parser
 import Evaluator
+import Utils
 
 import qualified Data.Set as S
 import qualified Data.Vector as V
 import qualified Data.HashMap as H
 
-test1 = TestCase (assertEqual "for (foo 3)," (1,2) (1 + 3, 2))
+-- test1 = TestCase (assertEqual "for (foo 3)," (1,2) (1 + 3, 2))
 
+-- HUnit
 parsingTests =  test [ "List" ~: "(+ 1 2)" ~: readExpr "(+ 1 2)" ~=? Right (List [Symbol "+", Number 1, Number 2])
                      , "List" ~: "( +  1   2)" ~: readExpr "( +  1   2)" ~=? Right (List [Symbol "+", Number 1, Number 2])
                      , "List" ~: "(+ 1 2 )" ~: readExpr "(+ 1 2 )" ~=? Right (List [Symbol "+", Number 1, Number 2])
@@ -26,33 +28,14 @@ parsingTests =  test [ "List" ~: "(+ 1 2)" ~: readExpr "(+ 1 2)" ~=? Right (List
 prop_revapp :: [Int] -> [Int] -> Bool
 prop_revapp xs ys = reverse (xs++ys) == reverse ys ++ reverse xs
 
-genChar :: Gen Char
-genChar = elements "abcdefghijkpqrstuvwxyABCDEFGHIJKLMNOPQRSTUVWXYZ"
-
-genSpecialChar :: Gen Char
-genSpecialChar = elements "!#$%&|*+-/<=>?@^_~"
-
-genKeyword :: Gen String
-genKeyword = (listOf1 (oneof [genSpecialChar, genChar])) >>= return . ((++) ":")
-
-genKeywordExpr :: Gen Expr
-genKeywordExpr = genKeyword >>= return . Keyword . drop 1
-
-genNumber :: Gen Integer
-genNumber = choose (-100, 100)
-
-genNumberExpr :: Gen Expr
-genNumberExpr = genNumber >>= return . Number
-
--- genListExpr :: Gen Expr
--- genListExpr =
---     do
-
-
--- prop_list_spaces :: Bool
--- prop_list_spaces =
---     forAll orderedList $ \xs ->
---     readExpr "(" ++ ")"
+-- QuickCheck -> So much nicer!
+prop_list_parsing = forAll (oneof [ genListOf genExprStr
+                                  , genVectorOf genKeyword
+                                  , genSetOf genKeyword
+                                  ]) $
+                            \lst -> case readExpr lst of
+                                        Right x -> True
+                                        _       -> False
 
 
 
@@ -69,7 +52,7 @@ main :: IO ()
 main = do
     -- quickCheck prop_addition
     runTestTT parsingTests
-    quickCheck prop_revapp
+    quickCheck prop_list_parsing
 
 -- main = quickCheck prop_revapp
 -- main = putStrLn "Test suite not yet implemented"

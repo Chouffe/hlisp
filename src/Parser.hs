@@ -264,11 +264,10 @@ hashmap = parens "{" "}" hashmapEntry (\ keyvals -> let keys = (map (\ (List [k,
 expr :: Parser Expr
 expr = list
         <|> vector
-        <|> set
+        <|> (try set <|> boolean)
         <|> hashmap
         <|> (try nil <|> quote <|> symbol)
         <|> symbol
-        <|> anyString
         <|> number
         <|> boolean
         <|> keyword
