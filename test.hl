@@ -4,6 +4,7 @@
 (defn (<= x y)
   (or (< x y) (= x y)))
 
+
 (defn (map f xs)
   (if (nil? xs)
       nil
@@ -21,6 +22,10 @@
       (if (nil? xs)
         x0
         (((reduce f) (f x0 (car xs))) (cdr xs))))))
+
+(defn (min x . xs)
+  (((reduce (lambda (acc y) (if (< y acc) y acc))) x) xs))
+
 
 (defn (filter pred)
   (lambda (xs)

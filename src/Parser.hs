@@ -39,6 +39,7 @@ import qualified Data.HashMap as H
 import System.IO (Handle)
 
 data Expr = List [Expr]
+          | DottedList [Expr] Expr
           | Vector (V.Vector Expr)
           | Set (S.Set Expr)
           | Hashmap (H.Map Expr Expr)
@@ -92,6 +93,7 @@ instance Show Expr where
     show (Symbol s)      = s
     show (Keyword kw)    = ":" ++ kw
     show (Port _)        = "<io port>"
+    show (DottedList xs x) = "(" ++ (intercalate " " (map show xs)) ++ " . " ++ (show x) ++ ")"
     show (List expr)     = "(" ++ (intercalate " " (map show expr)) ++ ")"
     show (Vector expr)    = "[" ++ (intercalate " " (map show (V.toList expr))) ++ "]"
     show (Hashmap h)    = "{" ++ (intercalate " " (map (\ (k, v) -> show k ++ " " ++ show v) (H.assocs h))) ++ "}"
@@ -246,6 +248,18 @@ parens opening closing separator constructor = do
 list :: Parser Expr
 list = parens "(" ")" expr (return . List)
 
+dottedList :: Parser Expr
+dottedList = do
+  string "("
+  spaces
+  es <- sepEndBy expr spaces
+  char '.'
+  spaces
+  e <- expr
+  spaces
+  string ")"
+  return $ DottedList es e
+
 vector :: Parser Expr
 vector = parens "[" "]" expr (return . Vector . V.fromList)
 
@@ -270,7 +284,7 @@ hashmap = parens "{" "}" hashmapEntry (\ keyvals -> let keys = (map (\ (List [k,
                                                         else fail ("Duplicate entry in hashmap"))
 
 expr :: Parser Expr
-expr = list
+expr = (try dottedList <|> list)
         <|> vector
         <|> (try set <|> boolean)
         <|> hashmap

@@ -57,27 +57,68 @@ isSymbol :: [Expr] -> ThrowsError Expr
 isSymbol [Symbol _] = return $ Bool True
 isSymbol _ = return $ Bool False
 
+isKeyword :: [Expr] -> ThrowsError Expr
+isKeyword [Keyword _] = return $ Bool True
+isKeyword _ = return $ Bool False
+
 isNumber :: [Expr] -> ThrowsError Expr
 isNumber [Number _] = return $ Bool True
 isNumber _ = return $ Bool False
+
+isSet :: [Expr] -> ThrowsError Expr
+isSet [Set _] = return $ Bool True
+isSet _ = return $ Bool False
+
+isVector :: [Expr] -> ThrowsError Expr
+isVector [Vector _] = return $ Bool True
+isVector _ = return $ Bool False
+
+isClosure :: [Expr] -> ThrowsError Expr
+isClosure [PrimitiveFunc _ _] = return $ Bool True
+isClosure [IOPrimitiveFunc _ _] = return $ Bool True
+isClosure [Closure _ _ _ _] = return $ Bool True
+isClosure _ = return $ Bool False
+
+isHashMap :: [Expr] -> ThrowsError Expr
+isHashMap [Hashmap _] = return $ Bool True
+isHashMap _ = return $ Bool False
+
 
 isNil :: [Expr] -> ThrowsError Expr
 isNil (Nil:[]) = return $ Bool True
 isNil [Symbol "quote", List []] = return $ Bool True
 isNil _ = return $ Bool False
 
+isList :: [Expr] -> ThrowsError Expr
+isList es = do
+  n <- isNil es
+  case n of
+    Bool True -> return $ Bool True
+    _         -> isListAux es
+      where isListAux [List _] = return $ Bool True
+            isListAux [DottedList _ _] = return $ Bool True
+            isListAux _ = return $ Bool False
+
 cdr :: [Expr] -> ThrowsError Expr
-cdr [List (x : [])] = return $ Nil
-cdr [List (x : xs )] = return $ List xs
+cdr [List (_ : [])] = return $ Nil
+cdr [List (_ : xs )] = return $ List xs
+cdr [DottedList [] y] = return y
+cdr [DottedList [_] y] = return y
+cdr [DottedList (_:xs) y] = return $ DottedList xs y
 cdr badArg = throwError $ NumArgs 1 badArg
 
 car :: [Expr] -> ThrowsError Expr
 car [List (x : xs)] = return x
+car [DottedList (x : _) _] = return x
 car badArg = throwError $ NumArgs 1 badArg
 
 cons :: [Expr] -> ThrowsError Expr
 cons [expr, Nil] = return $ List [expr]
 cons [expr, List exprs] = return $ List (expr : exprs)
+cons [expr, DottedList es e] = return $ DottedList (expr : es) e
+cons [expr, Vector e] = return $ Vector $ V.snoc e expr
+-- TODO: Ord instance for Expr
+-- cons [expr, Set e] = return $ Set $ S.insert expr e
 cons badArg = throwError $ NumArgs 2 badArg
 
 eqv :: [Expr] -> ThrowsError Expr
@@ -106,6 +147,8 @@ writeProc [obj, Port port] = liftIO $ hPrint port obj >> (return $ Bool True)
 
 applyProc :: [Expr] -> IOThrowsError Expr
 applyProc [func, List args] = apply func args
+applyProc [func, Vector args] = apply func (V.toList args)
+applyProc [func, Set args] = apply func (S.toList args)
 applyProc (func:args) = apply func args
 
 load :: String -> IOThrowsError [Expr]
@@ -133,11 +176,19 @@ primitives = [
              , ("string=?", strBoolBinop (==))
 
              -- Runtime type checks
-             , ("string?", isString)
-             , ("number?", isString)
-             , ("symbol?", isString)
-             -- , ("seq?",    isNil)
-             , ("nil?",    isNil)
+             , ("string?",   isString)
+             , ("number?",   isNumber)
+             , ("symbol?",   isSymbol)
+             , ("keyword?",  isKeyword)
+             , ("fn?",       isClosure)
+
+             , ("set?",      isSet)
+             , ("hashmap?",  isHashMap)
+             , ("vector?",   isVector)
+
+             , ("list?",     isList)
+             , ("seq?",      isList)
+             , ("nil?",      isNil)
 
              -- Arithmetic
              , ("+", numericBinop (+))
@@ -154,7 +205,7 @@ primitiveBindings = nullEnv >>= (flip bindVars $ map makePrimitiveFunc primitive
 makeClosure :: (Maybe String) -> Env -> [Expr] -> [Expr] -> IOThrowsError Expr
 makeClosure varargs env params body = return $ Closure (map show params) varargs body env
 makeNormalClosure = makeClosure Nothing
--- makeVarArgsClosure = makeClosure . Just . show
+makeVarArgsClosure = makeClosure . Just . show
 
 
 eval :: Env -> Expr -> IOThrowsError Expr
@@ -185,9 +236,16 @@ eval env (List [Symbol "def", (Symbol var), expr]) = eval env expr >>= defineVar
 
 -- Defn
 eval env (List ((Symbol "defn") : List (Symbol var : params) : body )) = makeNormalClosure env params body >>= defineVar env var
+eval env (List ((Symbol "defn") : DottedList (Symbol var : params) varargs : body )) = makeVarArgsClosure varargs env params body >>= defineVar env var
 
 -- Lambda
 eval env (List (Symbol "lambda" : List params : body)) = makeNormalClosure env params body
+eval env (List (Symbol "lambda" : DottedList params varargs : body)) = makeVarArgsClosure varargs env params body
+
+-- Let: TODO
+-- eval env (List (Symbol "let" : (List [Symbol x, e]) : body)) =
+--   do evaled <- eval env e
+--       bindVars env [(x, evaled)]
 
 -- Quote
 eval _ (List [Symbol "quote", expr]) = return expr
