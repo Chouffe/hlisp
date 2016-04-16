@@ -6,11 +6,17 @@ import Text.ParserCombinators.Parsec (  Parser
 import Text.Parsec (  letter
                     , notFollowedBy
                     , noneOf
+                    , choice
                     , many
                     , manyTill
                     , digit
                     , char
                     , endBy
+                    , endOfLine
+                    , eof
+                    , optional
+                    , newline
+                    , between
                     , anyChar
                     , string
                     , oneOf
@@ -20,9 +26,10 @@ import Text.Parsec (  letter
                     , sepEndBy
                     , many1
                     , skipMany1
+                    , skipMany
                     , try
                    )
-import Control.Applicative hiding (many)
+import Control.Applicative hiding (many, optional)
 import Control.Monad
 import Control.Monad.Error
 -- import Control.Monad.Error.Class
@@ -283,17 +290,34 @@ hashmap = parens "{" "}" hashmapEntry (\ keyvals -> let keys = (map (\ (List [k,
                                                         then return $ List [Symbol "quote", List keyvals]
                                                         else fail ("Duplicate entry in hashmap"))
 
+comments :: Parser ()
+comments = do
+  char ';'
+  skipMany (noneOf "\r\n")
+  choice [ newline >> return ()
+         , endOfLine >> return ()
+         , eof
+         ]
+  return ()
+
 expr :: Parser Expr
-expr = (try dottedList <|> list)
-        <|> vector
-        <|> (try set <|> boolean)
-        <|> hashmap
-        <|> (try nil <|> quote <|> symbol)
-        <|> symbol
-        <|> number
-        <|> boolean
-        <|> keyword
-        <|> anyString
+expr = do
+  optional (skipMany comments)
+  spaces
+  e <- ((try dottedList <|> list)
+         <|> vector
+         <|> (try set <|> boolean)
+         <|> hashmap
+         <|> (try nil <|> quote <|> symbol)
+         <|> symbol
+         <|> number
+         <|> boolean
+         <|> keyword
+         <|> anyString)
+  spaces
+  return e
+
+-- expr = optional comments >> return Nil
 
 quote :: Parser Expr
 quote = do

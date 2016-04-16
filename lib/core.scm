@@ -1,3 +1,5 @@
+;; Core hlisp functions
+
 (def identity (lambda (x) x))
 
 (defn (partial f x)
@@ -19,6 +21,8 @@
   (lambda (x) (f (g x))))
 
 (defn (complement f) (comp not f))
+
+;; Sequence utils
 
 (defn (map f xs)
   (if (nil? xs)
@@ -49,18 +53,6 @@
 
 (def remove (lambda (pred xs) (filter (complement pred) xs)))
 
-(def zero? (partial = 0))
-
-(def pos? (partial < 0))
-
-(def neg? (partial > 0))
-
-(defn (>= x y)
-  (or (> x y) (= x y)))
-
-(defn (<= x y)
-  (or (< x y) (= x y)))
-
 (defn (range start end)
   (if (>= start end)
       '()
@@ -88,3 +80,17 @@
 
 (defn (vec coll)
   (into [] coll))
+
+;; Number utils
+
+(def zero? (partial = 0))
+
+(def pos? (partial < 0))
+
+(def neg? (partial > 0))
+
+(defn (>= x y)
+  (or (> x y) (= x y)))
+
+(defn (<= x y)
+  (or (< x y) (= x y)))
