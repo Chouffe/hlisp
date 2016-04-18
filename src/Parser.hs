@@ -77,7 +77,7 @@ instance Eq Expr where
     (==) (Symbol x) (Symbol y) = x == y
     (==) (Keyword x) (Keyword y) = x == y
     -- TODO: fixme -> this is wrong
-    (==) (List xs) (List ys) = and $ zipWith (==) xs ys
+    (==) (List xs) (List ys) = and $ [length xs == length ys] ++ (zipWith (==) xs ys)
     (==) (Vector xs) (Vector ys) = xs == ys
     (==) (Hashmap h) (Hashmap t) = h == t
     (==) (Set xs) (Set ys) = xs == ys
@@ -213,8 +213,17 @@ nilEmptyList = string "'()" >> return Nil
 nil :: Parser Expr
 nil = nilSymbol <|> nilEmptyList
 
+positiveNumber :: Parser Expr
+positiveNumber = fmap (Number . read) (many1 digit)
+
+negativeNumber :: Parser Expr
+negativeNumber = do
+  char '-'
+  n <- many1 digit
+  return $ Number (- (read n))
+
 number :: Parser Expr
-number = fmap (Number . read) (many1 digit)
+number = positiveNumber <|> negativeNumber
 
 false :: Parser Expr
 false = string "f" >> return (Bool False)
@@ -308,9 +317,8 @@ expr = do
          <|> vector
          <|> (try set <|> boolean)
          <|> hashmap
-         <|> (try nil <|> quote <|> symbol)
+         <|> (try nil <|> quote <|> number <|> symbol)
          <|> symbol
-         <|> number
          <|> boolean
          <|> keyword
          <|> anyString)

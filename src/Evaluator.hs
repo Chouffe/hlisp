@@ -9,6 +9,7 @@ import Control.Monad
 import Control.Monad.Error
 import Parser
 import Data.List (nub)
+import Data.IORef
 import System.IO (hPrint, stdout)
 
 unpackNum :: Expr -> ThrowsError Integer
@@ -135,11 +136,23 @@ eqv badArgList                             = throwError $ NumArgs 2 badArgList
 
 ioPrimitives :: [(String, [Expr] -> IOThrowsError Expr)]
 ioPrimitives = [ ("slurp", readContents)
+               , ("print", printAux)
+               , ("println", printLn)
                , ("spit", writeProc)
                , ("apply", applyProc)]
 
 readContents :: [Expr] -> IOThrowsError Expr
 readContents [String filename] = liftM String $ liftIO $ readFile filename
+
+printAux :: [Expr] -> IOThrowsError Expr
+printAux [] = return Nil
+printAux [x] = (liftIO $ putStr (show x)) >> return Nil
+prinAux (x:xs) = (liftIO $ putStr (show x)) >> printLn xs
+
+printLn :: [Expr] -> IOThrowsError Expr
+printLn [] = (liftIO $ putChar '\n') >> return Nil
+printLn [x] = (liftIO $ putStrLn (show x)) >> return Nil
+prinLn (x:xs) = (liftIO $ putStr (show x)) >> printLn xs
 
 writeProc :: [Expr] -> IOThrowsError Expr
 writeProc [obj]            = writeProc [obj, Port stdout]
@@ -171,7 +184,6 @@ primitives = [
              , ("<", numBoolBinop (<))
              , (">", numBoolBinop (>))
              , ("not=", numBoolBinop (/=))
-
 
              , ("string=?", strBoolBinop (==))
 
@@ -242,13 +254,18 @@ eval env (List ((Symbol "defn") : DottedList (Symbol var : params) varargs : bod
 eval env (List (Symbol "lambda" : List params : body)) = makeNormalClosure env params body
 eval env (List (Symbol "lambda" : DottedList params varargs : body)) = makeVarArgsClosure varargs env params body
 
--- Let: TODO
--- eval env (List (Symbol "let" : (List [Symbol x, e]) : body)) =
---   do evaled <- eval env e
---       bindVars env [(x, evaled)]
+-- Let
+eval env (List (Symbol "let" : (List []) : body)) = liftM last $ mapM (eval env) body
+eval envRef (List (Symbol "let" : (List ((List [Symbol x, e]) : bindings)) : body)) = do
+  evaledE <- eval envRef e
+  newEnv <- liftIO $ bindVars envRef [(x,evaledE)]
+  inner <- eval newEnv (List (Symbol "let" :  List bindings : body))
+  eval envRef $ List [ List (Symbol "lambda" : List [ Symbol x ] : inner : []), e ]
+eval env badArg@(List (Symbol "let" : _)) = throwError $ BadSpecialForm "Malformed let" badArg
 
 -- Quote
 eval _ (List [Symbol "quote", expr]) = return expr
+eval _ badArg@(List ((Symbol "quote") : _)) = throwError $ BadSpecialForm "Malformed quote" badArg
 
 -- If
 eval env (List [Symbol "if", pred, thenBranch, elseBranch]) = do
@@ -256,8 +273,10 @@ eval env (List [Symbol "if", pred, thenBranch, elseBranch]) = do
     case result of
         Bool False -> eval env elseBranch
         _          -> eval env thenBranch
+eval env badArg@(List ((Symbol "if") : _)) = throwError $ BadSpecialForm "Malformed if" badArg
 
 -- Cond
+-- TODO: Rewrite in terms of if
 eval _ (List [Symbol "cond"]) = return $ Nil
 eval env (List ((Symbol "cond") : (List (pred : e : [])) : clauses)) = do
     result <- eval env pred
@@ -300,7 +319,6 @@ eval env (List (fun : args)) = do
     func <- eval env fun
     argVals <- mapM (eval env) args
     apply func argVals
-
 
 eval _ badForm = throwError $ BadSpecialForm "Unrecognized special form" badForm
 
@@ -362,6 +380,14 @@ x1 = List [ Symbol "+"
 
 l = List [ Symbol "lambda"
          , List [ Symbol "x" ]
+         , List [ Symbol "+"
+                , Number 1
+                , Symbol "x"
+                ]
+         ]
+
+l1 = List [ Symbol "let"
+         , List [ Symbol "x", Number 42 ]
          , List [ Symbol "+"
                 , Number 1
                 , Symbol "x"
