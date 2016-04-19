@@ -2,7 +2,8 @@ module Parser where
 
 import Text.ParserCombinators.Parsec (  Parser
                                       , parse
-                                      , ParseError )
+                                      , ParseError
+                                      , (<?>) )
 import Text.Parsec (  letter
                     , notFollowedBy
                     , noneOf
@@ -205,10 +206,10 @@ specialChar :: Parser Char
 specialChar = oneOf "!#$%&|*+-/<=>?@^_~"
 
 nilSymbol :: Parser Expr
-nilSymbol = string "nil" >> notFollowedBy specialChar >> return Nil
+nilSymbol = try $ string "nil" >> notFollowedBy specialChar >> return Nil
 
 nilEmptyList :: Parser Expr
-nilEmptyList = string "'()" >> return Nil
+nilEmptyList = try $ string "'()" >> return Nil
 
 nil :: Parser Expr
 nil = nilSymbol <|> nilEmptyList
@@ -217,7 +218,7 @@ positiveNumber :: Parser Expr
 positiveNumber = fmap (Number . read) (many1 digit)
 
 negativeNumber :: Parser Expr
-negativeNumber = do
+negativeNumber = try $ do
   char '-'
   n <- many1 digit
   return $ Number (- (read n))
@@ -232,10 +233,10 @@ true :: Parser Expr
 true = string "t" >> return (Bool True)
 
 boolean :: Parser Expr
-boolean = char '#' >> (false <|> true)
+boolean = try $ char '#' >> (false <|> true)
 
 symbol :: Parser Expr
-symbol = do
+symbol = try $ do
     h <- letter <|> specialChar
     t <- many (digit <|> letter <|> specialChar)
     return $ Symbol (h:t)
@@ -277,7 +278,7 @@ dottedList = do
   return $ DottedList es e
 
 vector :: Parser Expr
-vector = parens "[" "]" expr (return . Vector . V.fromList)
+vector = parens "[" "]" expr (return . Vector . V.fromList) <?> "Malformed vector"
 
 set :: Parser Expr
 set = parens "#{" "}" expr
@@ -300,7 +301,8 @@ hashmap = parens "{" "}" hashmapEntry (\ keyvals -> let keys = (map (\ (List [k,
                                                         else fail ("Duplicate entry in hashmap"))
 
 comments :: Parser ()
-comments = do
+comments = try $ do
+  spaces
   char ';'
   skipMany (noneOf "\r\n")
   choice [ newline >> return ()
@@ -317,10 +319,15 @@ expr = do
          <|> vector
          <|> (try set <|> boolean)
          <|> hashmap
-         <|> (try nil <|> quote <|> number <|> symbol)
+         -- <|> (try nil <|> quote <|> number <|> symbol)
+         <|> nil
+         <|> quote
+         <|> number
+         <|> symbol
          <|> symbol
          <|> boolean
          <|> keyword
+         -- <|> (keyword <?> "error keyword")
          <|> anyString)
   spaces
   return e
@@ -328,7 +335,7 @@ expr = do
 -- expr = optional comments >> return Nil
 
 quote :: Parser Expr
-quote = do
+quote = try $ do
     char '\''
     t <- expr
     return $ List [Symbol "quote", t]

@@ -12,7 +12,7 @@
 
 (def inc (partial + 1))
 
-(def dec (partial - 1))
+(defn (dec x) (- x 1))
 
 (defn (not x)
   (if x #f #t))
@@ -72,8 +72,7 @@
     '()
     (concat (reverse (cdr xs)) (cons (car xs) nil))))
 
-(defn (list . xs)
-  (reverse (into '() xs)))
+(defn (list . xs) xs)
 
 (defn (seq coll)
   (apply list coll))

@@ -19,13 +19,22 @@ genChar = elements "abcdefghijkpqrstuvwxyABCDEFGHIJKLMNOPQRSTUVWXYZ"
 genNil :: Gen String
 genNil = elements ["nil", "'()"]
 
+genNilExpr :: Gen Expr
+genNilExpr = elements [ Nil ]
+
 genBool :: Gen String
 genBool = elements ["#t", "#f"]
+
+genBoolExpr :: Gen Expr
+genBoolExpr = elements [Bool True, Bool False]
 
 genString :: Gen String
 genString = do
     str <- listOf1 genChar
     return $ "\"" ++ str ++ "\""
+
+genStringExpr :: Gen Expr
+genStringExpr = genString >>= return . String
 
 genSymbol :: Gen String
 genSymbol = do
@@ -76,3 +85,11 @@ genVectorOf = genContainerOf False "[" "]"
 
 genSetOf :: Gen String -> Gen String
 genSetOf = genContainerOf True "#{" "}"
+
+
+genAtomExpr :: Gen Expr
+genAtomExpr = oneof [ genKeywordExpr
+                    , genBoolExpr
+                    , genNilExpr
+                    , genStringExpr
+                    ]

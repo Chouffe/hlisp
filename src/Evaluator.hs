@@ -299,11 +299,17 @@ eval _ (List ((Symbol "case") : key : val@(List (e1 : e2 : _)) : clauses)) = thr
 -- And
 eval _ (List [Symbol "and"]) = return $ Bool True
 eval env (List ((Symbol "and") : expr : [])) = eval env expr
-eval env (List ((Symbol "and") : expr : exprs)) = do
-    evaledExpr <- eval env expr
-    case evaledExpr of
-        Bool False -> return $ Bool False
-        _          -> eval env (List ((Symbol "and") : exprs))
+eval env (List ((Symbol "and") : expr : exprs)) =
+  eval env $ List [ (Symbol "if")
+                  , expr
+                  , List ((Symbol "and") : exprs)
+                  , Bool False
+                  ]
+-- eval env (List ((Symbol "and") : expr : exprs)) = do
+--     evaledExpr <- eval env expr
+--     case evaledExpr of
+--         Bool False -> return $ Bool False
+--         _          -> eval env (List ((Symbol "and") : exprs))
 
 -- Or
 eval _ (List [Symbol "or"]) = return Nil

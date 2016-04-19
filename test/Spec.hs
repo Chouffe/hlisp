@@ -1,9 +1,13 @@
 import Test.QuickCheck
-import Test.HUnit
+import Test.QuickCheck.Monadic (assert, monadicIO, pick, pre, run)
+import Test.HUnit hiding (assert)
 
 import Parser
 import Evaluator
 import Utils
+
+import Control.Monad
+import Control.Monad.Error
 
 import qualified Data.Set as S
 import qualified Data.Vector as V
@@ -36,6 +40,21 @@ prop_list_parsing = forAll (oneof [ genListOf genExprStr
                             \lst -> case readExpr lst of
                                         Right x -> True
                                         _       -> False
+
+makeIfClause :: Expr -> Expr -> Expr -> Expr
+makeIfClause pred thenBranch elseBranch =
+  List [Symbol "if", pred, thenBranch, elseBranch]
+
+-- prop_eval_if = monadicIO $
+--   forAll ((,,) <$> (suchThat genAtomExpr (/= (Bool False))) <*> genAtomExpr <*> genAtomExpr) $
+--   \ (pred, thenBranch, elseBranch) -> do
+--     env     <- nullEnv
+--     evaledE <- runErrorT $ eval env (makeIfClause pred thenBranch elseBranch)
+--     assert True
+    -- case evaledE of
+    --     Right e -> e == thenBranch
+    --     _ -> False
+
 
 
 
